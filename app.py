@@ -8,25 +8,54 @@ app = Flask(__name__)
 # Load trained model
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "../recommender-models/career_recommender.pkl")
+scaler_path = os.path.join(script_dir, "../recommender-models/scaler.pkl")
+
 model = joblib.load(model_path)
+scaler = joblib.load(scaler_path)  # Load the scaler for feature scaling
+
+# 🔥 Define expected feature names (must match training dataset)
+expected_features = [
+    "GPA", "Extracurriculars", "InternshipExperience", "Projects",
+    "Leadership_Positions", "Courses", "Research_Experience", "Coding_Skills",
+    "Communication_Skills", "Problem_Solving_Skills", "Teamwork_Skills",
+    "AnalyticalSkills", "Presentation_Skills", "Networking_Skills",
+    "Certifications"
+]
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json  # User input
-    features = pd.DataFrame([data])  # Convert to DataFrame
+    data = request.json  # Get user input
+    print("Received data:", data)  # Debugging
 
-    # Get probability predictions for all careers
-    probabilities = model.predict_proba(features)[0]
+    # Convert input to DataFrame
+    features = pd.DataFrame([data])
+
+    # 🔥 Ensure all required features are present (fill missing ones with 0)
+    for feature in expected_features:
+        if feature not in features:
+            features[feature] = 0
+
+    # Ensure column order matches training
+    features = features[expected_features]
+
+    # 🔥 Convert categorical values ("Yes"/"No") to numbers
+    for column in ["Extracurriculars", "InternshipExperience", "Courses", "Certifications"]:
+        features[column] = features[column].map({"Yes": 1, "No": 0}).fillna(0)
+
+    # 🔥 Apply scaling to match the training data
+    features_scaled = scaler.transform(features)
+
+    # Make a prediction
+    probabilities = model.predict_proba(features_scaled)[0]
     career_classes = model.classes_
 
-    # Sort careers by probability
-    career_predictions = sorted(
-        zip(career_classes, probabilities), key=lambda x: x[1], reverse=True
-    )
+    # Sort predictions by probability
+    career_predictions = sorted(zip(career_classes, probabilities), key=lambda x: x[1], reverse=True)
 
     # Return the top 3 career predictions
     top_careers = [{"career": career, "probability": round(prob * 100, 2)} for career, prob in career_predictions[:3]]
 
+    print("Returning predictions:", top_careers)  # Debugging
     return jsonify({"predictions": top_careers})
 
 if __name__ == "__main__":
