@@ -2,15 +2,14 @@ import joblib
 import os
 import pandas as pd
 
-# Load trained model and scaler
 script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(script_dir, "../recommender-models/career_recommender.pkl")
 scaler_path = os.path.join(script_dir, "../recommender-models/scaler.pkl")
 
 model = joblib.load(model_path)
-scaler = joblib.load(scaler_path)  # Load scaler for feature scaling
+scaler = joblib.load(scaler_path)  
 
-# 🔥 Define expected feature names (must match training dataset)
+# expected feature names (must match training dataset)
 expected_features = [
     "GPA", "Extracurriculars", "InternshipExperience", "Projects",
     "Leadership_Positions", "Courses", "Research_Experience", "Coding_Skills",
@@ -19,7 +18,7 @@ expected_features = [
     "Certifications"
 ]
 
-# Define a sample test input
+# sample test input
 test_data = {
     "GPA": 4.0,
     "Extracurriculars": "No",
@@ -38,17 +37,17 @@ test_data = {
     "Certifications": "Yes"
 }
 
-# Convert categorical values ("Yes"/"No") to numbers
+# Convert categorical values -yes/no to numbers
 for key in test_data:
     if test_data[key] == "Yes":
         test_data[key] = 1
     elif test_data[key] == "No":
         test_data[key] = 0
 
-# Convert test data into DataFrame
+# Converting test data into DataFrame
 features = pd.DataFrame([test_data])
 
-# 🔥 Ensure all expected features are present (fill missing ones with 0)
+#(fill missing features with 0)
 for feature in expected_features:
     if feature not in features:
         features[feature] = 0
@@ -56,7 +55,7 @@ for feature in expected_features:
 # Ensure correct column order
 features = features[expected_features]
 
-# 🔥 Apply feature scaling
+# Applying feature scaling
 features_scaled = scaler.transform(features)
 
 # Make a prediction
