@@ -5,14 +5,16 @@ import pandas as pd
 
 app = Flask(__name__)
 
+# Load trained model, scaler, and label encoder
 script_dir = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(script_dir, "../recommender-models/career_recommender.pkl")
+model_path = os.path.join(script_dir, "../recommender-models/career_xgb.pkl")  # use career_xgb.pkl or career_rf.pkl
 scaler_path = os.path.join(script_dir, "../recommender-models/scaler.pkl")
+encoder_path = os.path.join(script_dir, "../recommender-models/label_encoder.pkl")
 
 model = joblib.load(model_path)
-scaler = joblib.load(scaler_path)  # Load the scaler for feature scaling
+scaler = joblib.load(scaler_path)
+label_encoder = joblib.load(encoder_path)
 
-#expected feature names 
 expected_features = [
     "GPA", "Extracurriculars", "InternshipExperience", "Projects",
     "Leadership_Positions", "Courses", "Research_Experience", "Coding_Skills",
@@ -23,38 +25,35 @@ expected_features = [
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json  # Get user input for the frontebd
-    print("Received data:", data)  
+    try:
+        data = request.json
+        features = pd.DataFrame([data])
 
-    # Convert input to DataFrame
-    features = pd.DataFrame([data])
+        # Convert categorical variables
+        categorical_columns = ["Extracurriculars", "InternshipExperience", "Courses", "Certifications"]
+        for col in categorical_columns:
+            if col in features.columns:
+                features[col] = features[col].map({"Yes": 1, "No": 0})
 
-    # Ensure all required features are present (fill missing ones with 0)
-    for feature in expected_features:
-        if feature not in features:
-            features[feature] = 0
+        for feature in expected_features:
+            if feature not in features:
+                features[feature] = 0
 
-    features = features[expected_features]
+        features = features[expected_features]
 
-    # Convert categorical values ("Yes"/"No") to numbers
-    for column in ["Extracurriculars", "InternshipExperience", "Courses", "Certifications"]:
-        features[column] = features[column].map({"Yes": 1, "No": 0}).fillna(0)
+        # to scale features
+        features_scaled = scaler.transform(features)
 
-    #Apply scaling to match the training data
-    features_scaled = scaler.transform(features)
+        # predict numeric label
+        predicted_label = model.predict(features_scaled)[0]
 
-    # Make a prediction
-    probabilities = model.predict_proba(features_scaled)[0]
-    career_classes = model.classes_
+        # Convert numeric label to career name abck again
+        predicted_career = label_encoder.inverse_transform([predicted_label])[0]
 
-    # Sort predictions by probability (disabled currently)
-    career_predictions = sorted(zip(career_classes, probabilities), key=lambda x: x[1], reverse=True)
+        return jsonify({"career": predicted_career})
 
-    # Return the top career predictions
-    top_careers = [{"career": career, "probability": round(prob * 100, 2)} for career, prob in career_predictions[:3]]
-
-    print("Returning predictions:", top_careers)  # Debugging
-    return jsonify({"predictions": top_careers})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
