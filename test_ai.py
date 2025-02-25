@@ -8,7 +8,7 @@ scaler = joblib.load(os.path.join(script_dir, "../recommender-models/scaler.pkl"
 label_encoder = joblib.load(os.path.join(script_dir, "../recommender-models/label_encoder.pkl"))
 
 test_data = {
-    "GPA": 2.0,
+    "GPA": 2.5,
     "Extracurriculars": "No",
     "InternshipExperience": "Yes",
     "Projects": 5,
