@@ -5,22 +5,15 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# Load trained model, scaler, and label encoder
 script_dir = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(script_dir, "../recommender-models/career_xgb.pkl")  # use career_xgb.pkl or career_rf.pkl
-scaler_path = os.path.join(script_dir, "../recommender-models/scaler.pkl")
-encoder_path = os.path.join(script_dir, "../recommender-models/label_encoder.pkl")
+model = joblib.load(os.path.join(script_dir, "../recommender-models/career_xgb.pkl"))
+scaler = joblib.load(os.path.join(script_dir, "../recommender-models/scaler.pkl"))
+label_encoder = joblib.load(os.path.join(script_dir, "../recommender-models/label_encoder.pkl"))
 
-model = joblib.load(model_path)
-scaler = joblib.load(scaler_path)
-label_encoder = joblib.load(encoder_path)
-
+# Expected input fields (only subject scores now)
 expected_features = [
-    "GPA", "Extracurriculars", "InternshipExperience", "Projects",
-    "Leadership_Positions", "Courses", "Research_Experience", "Coding_Skills",
-    "Communication_Skills", "Problem_Solving_Skills", "Teamwork_Skills",
-    "AnalyticalSkills", "Presentation_Skills", "Networking_Skills",
-    "Certifications"
+    "math_score", "history_score", "physics_score",
+    "chemistry_score", "biology_score", "english_score", "geography_score"
 ]
 
 @app.route("/predict", methods=["POST"])
@@ -29,25 +22,15 @@ def predict():
         data = request.json
         features = pd.DataFrame([data])
 
-        # Convert categorical variables
-        categorical_columns = ["Extracurriculars", "InternshipExperience", "Courses", "Certifications"]
-        for col in categorical_columns:
-            if col in features.columns:
-                features[col] = features[col].map({"Yes": 1, "No": 0})
-
+        # Ensure all expected fields are present
         for feature in expected_features:
             if feature not in features:
                 features[feature] = 0
 
         features = features[expected_features]
-
-        # to scale features
         features_scaled = scaler.transform(features)
 
-        # predict numeric label
         predicted_label = model.predict(features_scaled)[0]
-
-        # Convert numeric label to career name abck again
         predicted_career = label_encoder.inverse_transform([predicted_label])[0]
 
         return jsonify({"career": predicted_career})
