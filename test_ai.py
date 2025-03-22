@@ -46,7 +46,7 @@ test_data = {
     # "english_score": 95,   # Strong English
     # "geography_score": 80
 
-    #scientist
+    #scientist - correct
     "math_score": 92,
     "history_score": 75,
     "physics_score": 94,
