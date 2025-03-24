@@ -11,13 +11,13 @@ label_encoder = joblib.load(os.path.join(script_dir, "../recommender-models/labe
 test_data = {
 
     #software engineer:
-    #"math_score": 95,
-    #"history_score": 70,
-    #"physics_score": 96,
-    #"chemistry_score": 85,
-    #"biology_score": 78,
-    #"english_score": 88,
-    #"geography_score": 75
+    # "math_score": 95,
+    # "history_score": 70,
+    # "physics_score": 96,
+    # "chemistry_score": 85,
+    # "biology_score": 78,
+    # "english_score": 88,
+    # "geography_score": 75
 
     #doctor:
     # "math_score": 80,
@@ -38,22 +38,22 @@ test_data = {
     # "geography_score": 88
 
     #lawyer
-    # "math_score": 70,
-    # "history_score": 90,   # Strong in history
-    # "physics_score": 60,
-    # "chemistry_score": 65,
-    # "biology_score": 70,
-    # "english_score": 95,   # Strong English
-    # "geography_score": 80
+    "math_score": 70,
+    "history_score": 90,   # Strong in history
+    "physics_score": 60,
+    "chemistry_score": 65,
+    "biology_score": 70,
+    "english_score": 95,   # Strong English
+    "geography_score": 80
 
     #scientist - correct
-    "math_score": 92,
-    "history_score": 75,
-    "physics_score": 94,
-    "chemistry_score": 96,
-    "biology_score": 89,
-    "english_score": 80,
-    "geography_score": 78
+    # "math_score": 92,
+    # "history_score": 75,
+    # "physics_score": 94,
+    # "chemistry_score": 96,
+    # "biology_score": 89,
+    # "english_score": 80,
+    # "geography_score": 78
 
 }
 
