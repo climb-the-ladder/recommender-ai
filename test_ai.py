@@ -38,13 +38,13 @@ test_data = {
     # "geography_score": 88
 
     #lawyer
-    "math_score": 70,
-    "history_score": 90,   # Strong in history
-    "physics_score": 60,
-    "chemistry_score": 65,
-    "biology_score": 70,
-    "english_score": 95,   # Strong English
-    "geography_score": 80
+    # "math_score": 70,
+    # "history_score": 90,   # Strong in history
+    # "physics_score": 60,
+    # "chemistry_score": 65,
+    # "biology_score": 70,
+    # "english_score": 95,   # Strong English
+    # "geography_score": 80
 
     #scientist - correct
     # "math_score": 92,

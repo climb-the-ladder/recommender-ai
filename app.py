@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import joblib
 import os
 import pandas as pd
+from chatbot import CareerChatbot  # ✅ Import chatbot logic
 
 app = Flask(__name__)
 
@@ -10,7 +11,10 @@ model = joblib.load(os.path.join(script_dir, "../recommender-models/career_xgb.p
 scaler = joblib.load(os.path.join(script_dir, "../recommender-models/scaler.pkl"))
 label_encoder = joblib.load(os.path.join(script_dir, "../recommender-models/label_encoder.pkl"))
 
-# Expected input fields (only subject scores now)
+# Load chatbot recommender
+chatbot = CareerChatbot()
+
+# Expected input fields
 expected_features = [
     "math_score", "history_score", "physics_score",
     "chemistry_score", "biology_score", "english_score", "geography_score"
@@ -30,11 +34,34 @@ def predict():
         features = features[expected_features]
         features_scaled = scaler.transform(features)
 
+        # Predict the career
         predicted_label = model.predict(features_scaled)[0]
         predicted_career = label_encoder.inverse_transform([predicted_label])[0]
 
         return jsonify({"career": predicted_career})
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/chatbot-recommend", methods=["POST"])
+def chatbot_recommend():
+    """Handles chatbot recommendation requests."""
+    try:
+        data = request.json
+        gpa = float(data.get('gpa', 0))
+        career = data.get('career')
+
+        if not career or gpa <= 0:
+            return jsonify({"error": "Invalid GPA or career"}), 400
+
+        # Get university & career recommendations
+        unis, similar_careers = chatbot.recommend(gpa, career)
+
+        return jsonify({
+            "recommended_universities": unis,
+            "similar_careers": similar_careers
+        })
+    
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
