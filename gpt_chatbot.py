@@ -15,17 +15,34 @@ career_chatbot = CareerChatbot()
 # Store chat history
 chat_histories = {}
 
-def handle_chat(message, career=None, gpa=None, session_id="default"):
+def handle_chat(message, career=None, gpa=None, subject_grades=None, session_id="default"):
     """
     Handle chat messages using OpenAI's API with fallback to rule-based responses
+    
+    Args:
+        message: The user's message
+        career: The user's selected career
+        gpa: The user's overall GPA
+        subject_grades: Dictionary of subject grades
+        session_id: Unique identifier for the chat session
     """
     # Initialize chat history for this session if it doesn't exist
     if session_id not in chat_histories:
         chat_histories[session_id] = []
     
+    if subject_grades is None:
+        subject_grades = {}
+    
     # Get university and career information
     university_info = ""
     similar_careers_info = ""
+    grades_info = ""
+    
+    # Format subject grades information
+    if subject_grades:
+        grades_info = "\nSubject Grades:\n"
+        for subject, grade in subject_grades.items():
+            grades_info += f"- {subject}: {grade}/100\n"
     
     if career and gpa:
         try:
@@ -55,7 +72,7 @@ def handle_chat(message, career=None, gpa=None, session_id="default"):
     
     try:
         # Try to use OpenAI API
-        response_text = get_openai_response(message, career, gpa, university_info, similar_careers_info, session_id)
+        response_text = get_openai_response(message, career, gpa, subject_grades, university_info, similar_careers_info, grades_info, session_id)
         
         # Update chat history
         chat_histories[session_id].append(message)
@@ -66,27 +83,33 @@ def handle_chat(message, career=None, gpa=None, session_id="default"):
     except Exception as e:
         print(f"OpenAI API error: {str(e)}")
         # Fall back to rule-based responses
-        return get_fallback_response(message, career, gpa, university_info, similar_careers_info)
+        return get_fallback_response(message, career, gpa, subject_grades, university_info, similar_careers_info, grades_info)
 
-def get_openai_response(message, career=None, gpa=None, university_info="", similar_careers_info="", session_id="default"):
+def get_openai_response(message, career=None, gpa=None, subject_grades=None, university_info="", similar_careers_info="", grades_info="", session_id="default"):
     """Get response from OpenAI API"""
     
     # Create system message with context
-    system_message = f"""You are a helpful career advisor specializing in {career if career else 'various careers'}.
-    
+    system_message = f"""You are a specialized career advisor focused exclusively on providing information about {career if career else 'various careers'}, education requirements, university recommendations, and related career paths.
+
     USER INFORMATION:
     Career Interest: {career if career else 'Not specified'}
-    GPA: {gpa if gpa else 'Not specified'}/100
+    Overall GPA: {gpa if gpa else 'Not specified'}/100
+    {grades_info}
     
     UNIVERSITY RECOMMENDATIONS:{university_info}
     
     SIMILAR CAREERS:{similar_careers_info}
     
-    Be conversational and friendly. Always incorporate the university and career information provided above when relevant to the user's questions.
-    If the user asks about universities and you have university recommendations, share them.
-    If they ask about universities but you don't have their GPA, ask for it.
+    IMPORTANT INSTRUCTIONS:
+    1. ONLY answer questions related to careers, education, universities, academic performance, and professional development.
+    2. If the user asks about topics outside this scope (sports, politics, entertainment, general knowledge, etc.), politely redirect them to career-related topics.
+    3. For off-topic questions, respond with: "I specialize in providing career advice for {career}, university recommendations, and information on related careers. If you have any questions related to those topics or if there's anything else I can assist you with, feel free to let me know!"
+    4. Be conversational and friendly, but stay strictly within your defined scope.
+    5. If the user asks about universities and you have university recommendations, share them.
+    6. If they ask about universities but you don't have their GPA, ask for it.
+    7. If they ask about their grades or academic performance, refer to their subject grades if available.
     
-    Focus on career advice, education requirements, and university recommendations.
+    Your primary purpose is to help users with career guidance and educational planning, not to be a general-purpose assistant.
     """
     
     # Build the conversation history for the API
@@ -114,12 +137,26 @@ def get_openai_response(message, career=None, gpa=None, university_info="", simi
     
     return response.choices[0].message.content
 
-def get_fallback_response(message, career=None, gpa=None, university_info="", similar_careers_info=""):
+def get_fallback_response(message, career=None, gpa=None, subject_grades=None, university_info="", similar_careers_info="", grades_info=""):
     """Provide rule-based responses when API is unavailable"""
     message = message.lower()
     
+    # Check if the message is off-topic
+    off_topic_keywords = ['sports', 'game', 'movie', 'music', 'politics', 'news', 'weather', 'celebrity', 'tv', 'show', 'football', 'basketball', 'baseball', 'soccer', 'tennis']
+    if any(keyword in message for keyword in off_topic_keywords):
+        return f"I specialize in providing career advice for {career}, university recommendations, and information on related careers. If you have any questions related to those topics or if there's anything else I can assist you with, feel free to let me know!"
+    
+    # Check if the message is about grades
+    if any(word in message for word in ['grade', 'grades', 'score', 'marks', 'gpa']):
+        if grades_info:
+            return f"Here are your academic grades:{grades_info}\nYour overall GPA is {gpa}/100."
+        elif gpa:
+            return f"Your overall GPA is {gpa}/100. I don't have information about your individual subject grades."
+        else:
+            return "I don't have information about your grades. What's your GPA on a scale of 0-100?"
+    
     # Check if the message is about universities
-    if any(word in message for word in ['university', 'college', 'school', 'education', 'universities']):
+    elif any(word in message for word in ['university', 'college', 'school', 'education', 'universities']):
         if university_info:
             return f"Here are university recommendations for a career in {career} with a GPA of {gpa}:{university_info}"
         elif gpa and career:
@@ -156,23 +193,6 @@ def get_fallback_response(message, career=None, gpa=None, university_info="", si
                 return f"I encountered an error while searching for similar careers: {str(e)}"
         else:
             return "To suggest similar careers, I need to know what career you're interested in."
-    
-    # Check if the message is about career information
-    elif any(word in message for word in ['salary', 'pay', 'earn', 'income']):
-        salary_info = {
-            'Software Engineer': 'Software Engineers typically earn between $70,000 and $150,000 depending on experience and location.',
-            'Data Scientist': 'Data Scientists typically earn between $80,000 and $160,000 depending on experience and location.',
-            'Doctor': 'Doctors typically earn between $150,000 and $300,000+ depending on specialty and experience.',
-            'Lawyer': 'Lawyers typically earn between $60,000 and $180,000 depending on specialty and location.',
-            'Scientist': 'Scientists typically earn between $60,000 and $130,000 depending on field and experience.',
-            'Artist': 'Artists\' incomes vary widely, from $20,000 to $100,000+ depending on medium, recognition, and business skills.',
-            'Government Officer': 'Government Officers typically earn between $50,000 and $120,000 depending on the level of government, position, and years of service.'
-        }
-        
-        if career in salary_info:
-            return salary_info[career]
-        else:
-            return f"I don't have specific salary information for {career}, but you can research current market rates on job sites like Indeed or Glassdoor."
     
     # General response
     else:
