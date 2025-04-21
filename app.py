@@ -2,7 +2,9 @@ from flask import Flask, request, jsonify
 import joblib
 import os
 import pandas as pd
-from chatbot import CareerChatbot  # ✅ Import chatbot logic
+from chatbot import CareerChatbot  
+from gpt_chatbot import handle_chat
+
 
 app = Flask(__name__)
 
@@ -61,6 +63,22 @@ def chatbot_recommend():
             "recommended_universities": unis,
             "similar_careers": similar_careers
         })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+#new route for our chatbot
+@app.route("/chat", methods=["POST"])
+def chat():
+    try:
+        data = request.json
+        user_input = data.get("message", "")
+        if not user_input:
+            return jsonify({"error": "Message is required"}), 400
+
+        history = []  # in-memory; store in session/db for longer chat
+        response = handle_chat(user_input, history)
+        return jsonify({"response": response})
     
     except Exception as e:
         return jsonify({"error": str(e)}), 400
