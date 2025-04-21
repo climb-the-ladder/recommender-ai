@@ -17,37 +17,72 @@ chat_histories = {}
 
 def handle_chat(message, career=None, gpa=None, session_id="default"):
     """
-    Handle chat messages using OpenAI's API
-    
-    Args:
-        message: The user's message
-        career: The user's selected career
-        gpa: The user's GPA
-        session_id: Unique identifier for the chat session
+    Handle chat messages using OpenAI's API with fallback to rule-based responses
     """
     # Initialize chat history for this session if it doesn't exist
     if session_id not in chat_histories:
         chat_histories[session_id] = []
     
-    # Get university recommendations if we have GPA and career
-    university_context = ""
-    if gpa and career:
+    # Get university and career information
+    university_info = ""
+    similar_careers_info = ""
+    
+    if career and gpa:
         try:
-            unis, similar_careers = career_chatbot.recommend(float(gpa), career)
-            if unis:
-                university_context = f"The user has a GPA of {gpa}/100 and is interested in a career as a {career}. "
-                university_context += f"Based on this, these universities are recommended: "
-                university_context += ", ".join([f"{uni['University_Name']} ({uni['Rank_Tier']})" for uni in unis[:5]])
+            # Convert GPA to float if it's a string
+            if isinstance(gpa, str):
+                gpa = float(gpa)
                 
-                if similar_careers:
-                    university_context += f". Similar careers to {career} include: {', '.join(similar_careers[:3])}"
+            # Get university recommendations and similar careers
+            unis, similar_careers = career_chatbot.recommend(gpa, career)
+            
+            # Format university information
+            if unis:
+                university_info = f"\n\nBased on a GPA of {gpa}/100 and interest in {career}, these universities are recommended:\n"
+                for i, uni in enumerate(unis[:5], 1):
+                    university_info += f"{i}. {uni['University_Name']} ({uni['Rank_Tier']})\n"
+                
+                if len(unis) > 5:
+                    university_info += f"\nThere are {len(unis) - 5} more universities that match these criteria."
+            else:
+                university_info = f"\n\nNo specific universities found for {career} with a GPA of {gpa}/100."
+            
+            # Format similar careers information
+            if similar_careers:
+                similar_careers_info = f"\n\nSimilar careers to {career} include: {', '.join(similar_careers[:5])}"
         except Exception as e:
-            print(f"Error getting university recommendations: {str(e)}")
+            print(f"Error getting recommendations: {str(e)}")
+    
+    try:
+        # Try to use OpenAI API
+        response_text = get_openai_response(message, career, gpa, university_info, similar_careers_info, session_id)
+        
+        # Update chat history
+        chat_histories[session_id].append(message)
+        chat_histories[session_id].append(response_text)
+        
+        return response_text
+        
+    except Exception as e:
+        print(f"OpenAI API error: {str(e)}")
+        # Fall back to rule-based responses
+        return get_fallback_response(message, career, gpa, university_info, similar_careers_info)
+
+def get_openai_response(message, career=None, gpa=None, university_info="", similar_careers_info="", session_id="default"):
+    """Get response from OpenAI API"""
     
     # Create system message with context
     system_message = f"""You are a helpful career advisor specializing in {career if career else 'various careers'}.
-    Be conversational and friendly. {university_context}
     
+    USER INFORMATION:
+    Career Interest: {career if career else 'Not specified'}
+    GPA: {gpa if gpa else 'Not specified'}/100
+    
+    UNIVERSITY RECOMMENDATIONS:{university_info}
+    
+    SIMILAR CAREERS:{similar_careers_info}
+    
+    Be conversational and friendly. Always incorporate the university and career information provided above when relevant to the user's questions.
     If the user asks about universities and you have university recommendations, share them.
     If they ask about universities but you don't have their GPA, ask for it.
     
@@ -58,45 +93,36 @@ def handle_chat(message, career=None, gpa=None, session_id="default"):
     messages = [{"role": "system", "content": system_message}]
     
     # Add chat history (limited to last 5 exchanges to save tokens)
-    for i, (past_msg, past_resp) in enumerate(zip(chat_histories[session_id][::2], chat_histories[session_id][1::2])):
-        if i >= 5:  # Only include the last 5 exchanges
+    history = chat_histories.get(session_id, [])
+    for i in range(0, min(len(history), 10), 2):
+        if i/2 >= 5:  # Only include the last 5 exchanges
             break
-        messages.append({"role": "user", "content": past_msg})
-        messages.append({"role": "assistant", "content": past_resp})
+        messages.append({"role": "user", "content": history[i]})
+        if i+1 < len(history):
+            messages.append({"role": "assistant", "content": history[i+1]})
     
     # Add the current message
     messages.append({"role": "user", "content": message})
     
-    try:
-        # Call the OpenAI API using the new format
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=500
-        )
-        
-        response_text = response.choices[0].message.content
-        
-        # Update chat history
-        chat_histories[session_id].append(message)
-        chat_histories[session_id].append(response_text)
-        
-        return response_text
-        
-    except Exception as e:
-        print(f"OpenAI API error: {str(e)}")
-        return f"I'm having trouble connecting to my knowledge base. Please try again in a moment. Error: {str(e)}"
+    # Call the OpenAI API using the new format
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0.7,
+        max_tokens=500
+    )
+    
+    return response.choices[0].message.content
 
-def rule_based_response(message, career=None, gpa=None):
-    """
-    Fallback rule-based response system
-    """
+def get_fallback_response(message, career=None, gpa=None, university_info="", similar_careers_info=""):
+    """Provide rule-based responses when API is unavailable"""
     message = message.lower()
     
     # Check if the message is about universities
     if any(word in message for word in ['university', 'college', 'school', 'education', 'universities']):
-        if gpa and career:
+        if university_info:
+            return f"Here are university recommendations for a career in {career} with a GPA of {gpa}:{university_info}"
+        elif gpa and career:
             try:
                 unis, _ = career_chatbot.recommend(float(gpa), career)
                 if unis:
@@ -115,6 +141,22 @@ def rule_based_response(message, career=None, gpa=None):
         else:
             return "To recommend universities, I need to know your GPA. What's your GPA on a scale of 0-100?"
     
+    # Check if the message is about similar careers
+    elif any(word in message for word in ['similar', 'alternative', 'other career', 'other careers']):
+        if similar_careers_info:
+            return f"Here are some career alternatives you might consider:{similar_careers_info}"
+        elif career:
+            try:
+                _, similar_careers = career_chatbot.recommend(70, career)  # Use a default GPA just to get similar careers
+                if similar_careers:
+                    return f"Similar careers to {career} include: {', '.join(similar_careers[:5])}"
+                else:
+                    return f"I don't have information about careers similar to {career}."
+            except Exception as e:
+                return f"I encountered an error while searching for similar careers: {str(e)}"
+        else:
+            return "To suggest similar careers, I need to know what career you're interested in."
+    
     # Check if the message is about career information
     elif any(word in message for word in ['salary', 'pay', 'earn', 'income']):
         salary_info = {
@@ -123,29 +165,14 @@ def rule_based_response(message, career=None, gpa=None):
             'Doctor': 'Doctors typically earn between $150,000 and $300,000+ depending on specialty and experience.',
             'Lawyer': 'Lawyers typically earn between $60,000 and $180,000 depending on specialty and location.',
             'Scientist': 'Scientists typically earn between $60,000 and $130,000 depending on field and experience.',
-            'Artist': 'Artists\' incomes vary widely, from $20,000 to $100,000+ depending on medium, recognition, and business skills.'
+            'Artist': 'Artists\' incomes vary widely, from $20,000 to $100,000+ depending on medium, recognition, and business skills.',
+            'Government Officer': 'Government Officers typically earn between $50,000 and $120,000 depending on the level of government, position, and years of service.'
         }
         
         if career in salary_info:
             return salary_info[career]
         else:
             return f"I don't have specific salary information for {career}, but you can research current market rates on job sites like Indeed or Glassdoor."
-    
-    # Check if the message is about skills
-    elif any(word in message for word in ['skill', 'learn', 'know', 'ability']):
-        skills_info = {
-            'Software Engineer': 'Important skills for Software Engineers include programming languages (like Python, Java, JavaScript), problem-solving, algorithms, data structures, and teamwork.',
-            'Data Scientist': 'Data Scientists need skills in statistics, machine learning, Python or R programming, data visualization, and domain knowledge.',
-            'Doctor': 'Doctors need strong knowledge of medicine, biology, chemistry, critical thinking, communication, and empathy.',
-            'Lawyer': 'Lawyers need skills in critical thinking, research, writing, public speaking, negotiation, and knowledge of laws and regulations.',
-            'Scientist': 'Scientists need analytical thinking, research methods, statistics, technical writing, and specialized knowledge in their field.',
-            'Artist': 'Artists need creativity, technical skills in their medium, visual communication, marketing, networking, and business management.'
-        }
-        
-        if career in skills_info:
-            return skills_info[career]
-        else:
-            return f"For a career in {career}, you'll likely need a mix of technical skills specific to the field and soft skills like communication, problem-solving, and teamwork."
     
     # General response
     else:
