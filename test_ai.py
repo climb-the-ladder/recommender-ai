@@ -63,3 +63,12 @@ predicted_label = model.predict(features_scaled)[0]
 
 predicted_career = label_encoder.inverse_transform([predicted_label])[0]
 print(f"🎯 Recommended Career: {predicted_career}")
+
+def test_dummy_response_format():
+    """
+    Dummy test to check that the chatbot returns a response in string format.
+    """
+    from chatbot import get_chat_response  # Update if function name differs
+    dummy_input = "What career is best for me?"
+    response = get_chat_response(dummy_input)
+    assert isinstance(response, str)
